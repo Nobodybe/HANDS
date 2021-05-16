@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 import copy
 import argparse
+import time
+from pymouse import PyMouse
+from pykeyboard import PyKeyboard
 
 import cv2 as cv
 import numpy as np
 import mediapipe as mp
 
 from utils import CvFpsCalc
-
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -34,6 +36,7 @@ def get_args():
     return args
 
 
+
 def main():
     # 引数解析 #################################################################
     args = get_args()
@@ -47,6 +50,9 @@ def main():
     min_tracking_confidence = args.min_tracking_confidence
 
     use_brect = args.use_brect
+    now = [0, 0]
+    past = [0,0]
+    count=0
 
     # 相机准备 ###############################################################
     cap = cv.VideoCapture(cap_device)
@@ -64,6 +70,9 @@ def main():
     # FPS测量模块 ########################################################
     cvFpsCalc = CvFpsCalc(buffer_len=10)
 
+    k = PyKeyboard()
+    m = PyMouse()
+
     while True:
         display_fps = cvFpsCalc.get()
 
@@ -71,7 +80,7 @@ def main():
         ret, image = cap.read()
         if not ret:
             break
-        image = cv.flip(image, 1)  # ミラー表示
+        image = cv.flip(image, 1)  # 镜像显示
         debug_image = copy.deepcopy(image)
 
         # 检测实施 #############################################################
@@ -90,14 +99,29 @@ def main():
                 debug_image = draw_landmarks(debug_image, cx, cy,
                                              hand_landmarks, handedness)
                 debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-
+                past = now
+                now = [cx, cy]
         cv.putText(debug_image, "FPS:" + str(display_fps), (10, 30),
                    cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv.LINE_AA)
+
+
 
         # 键盘输入处理(ESC：終了) #################################################
         key = cv.waitKey(1)
         if key == 27:  # ESC
             break
+        count=count+1
+        print(now)
+        print(past)
+        print('\n')
+        if count>2 and results.multi_hand_landmarks is not None:
+            if now[0]-past[0]>120 and past!=[0,0]:
+                k.tap_key(k.right_key)
+                time.sleep(0.5)
+            if now[0]-past[0]<-120 and past!=[0,0]:
+                k.tap_key(k.left_key)
+                time.sleep(0.5)
+
 
         # 画面反映 #############################################################
         cv.imshow('MediaPipe Hand Demo', debug_image)

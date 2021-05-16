@@ -48,12 +48,12 @@ def main():
 
     use_brect = args.use_brect
 
-    # カメラ準備 ###############################################################
+    # 相机准备 ###############################################################
     cap = cv.VideoCapture(cap_device)
     cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
 
-    # モデルロード #############################################################
+    # 模型载荷 #############################################################
     mp_holistic = mp.solutions.holistic
     holistic = mp_holistic.Holistic(
         upper_body_only=upper_body_only,
@@ -61,20 +61,20 @@ def main():
         min_tracking_confidence=min_tracking_confidence,
     )
 
-    # FPS計測モジュール ########################################################
+    # FPS测量模块 ########################################################
     cvFpsCalc = CvFpsCalc(buffer_len=10)
 
     while True:
         display_fps = cvFpsCalc.get()
 
-        # カメラキャプチャ #####################################################
+        # 摄像机捕捉 #####################################################
         ret, image = cap.read()
         if not ret:
             break
         image = cv.flip(image, 1)  # ミラー表示
         debug_image = copy.deepcopy(image)
 
-        # 検出実施 #############################################################
+        # 检测实施 #############################################################
         image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
         image.flags.writeable = False
@@ -84,7 +84,7 @@ def main():
         # Face Mesh ###########################################################
         face_landmarks = results.face_landmarks
         if face_landmarks is not None:
-            # 外接矩形の計算
+            # 外接矩形计算
             brect = calc_bounding_rect(debug_image, face_landmarks)
             # 描画
             debug_image = draw_face_landmarks(debug_image, face_landmarks)
@@ -93,7 +93,7 @@ def main():
         # Pose ###############################################################
         pose_landmarks = results.pose_landmarks
         if pose_landmarks is not None:
-            # 外接矩形の計算
+            # 外接矩形计算
             brect = calc_bounding_rect(debug_image, pose_landmarks)
             # 描画
             debug_image = draw_pose_landmarks(debug_image, pose_landmarks,
@@ -105,9 +105,9 @@ def main():
         right_hand_landmarks = results.right_hand_landmarks
         # 左手
         if left_hand_landmarks is not None:
-            # 手の平重心計算
+            # 手掌重心计算
             cx, cy = calc_palm_moment(debug_image, left_hand_landmarks)
-            # 外接矩形の計算
+            # 外接矩形计算
             brect = calc_bounding_rect(debug_image, left_hand_landmarks)
             # 描画
             debug_image = draw_hands_landmarks(debug_image, cx, cy,
@@ -116,9 +116,9 @@ def main():
             debug_image = draw_bounding_rect(use_brect, debug_image, brect)
         # 右手
         if right_hand_landmarks is not None:
-            # 手の平重心計算
+            # 手掌重心计算
             cx, cy = calc_palm_moment(debug_image, right_hand_landmarks)
-            # 外接矩形の計算
+            # 外接矩形计算
             brect = calc_bounding_rect(debug_image, right_hand_landmarks)
             # 描画
             debug_image = draw_hands_landmarks(debug_image, cx, cy,
@@ -129,7 +129,7 @@ def main():
         cv.putText(debug_image, "FPS:" + str(display_fps), (10, 30),
                    cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv.LINE_AA)
 
-        # キー処理(ESC：終了) #################################################
+        # 键盘输入处理(ESC：終了) #################################################
         key = cv.waitKey(1)
         if key == 27:  # ESC
             break
@@ -152,17 +152,17 @@ def calc_palm_moment(image, landmarks):
 
         landmark_point = [np.array((landmark_x, landmark_y))]
 
-        if index == 0:  # 手首1
+        if index == 0:  # 手腕1
             palm_array = np.append(palm_array, landmark_point, axis=0)
-        if index == 1:  # 手首2
+        if index == 1:  # 手腕2
             palm_array = np.append(palm_array, landmark_point, axis=0)
-        if index == 5:  # 人差指：付け根
+        if index == 5:  # 食指：指根
             palm_array = np.append(palm_array, landmark_point, axis=0)
-        if index == 9:  # 中指：付け根
+        if index == 9:  # 中指：指根
             palm_array = np.append(palm_array, landmark_point, axis=0)
-        if index == 13:  # 薬指：付け根
+        if index == 13:  # 无名指：指根
             palm_array = np.append(palm_array, landmark_point, axis=0)
-        if index == 17:  # 小指：付け根
+        if index == 17:  # 小指：指根
             palm_array = np.append(palm_array, landmark_point, axis=0)
     M = cv.moments(palm_array)
     cx, cy = 0, 0
@@ -201,7 +201,7 @@ def draw_hands_landmarks(image,
 
     landmark_point = []
 
-    # キーポイント
+    # 关键点
     for index, landmark in enumerate(landmarks.landmark):
         if landmark.visibility < 0 or landmark.presence < 0:
             continue
@@ -212,51 +212,51 @@ def draw_hands_landmarks(image,
 
         landmark_point.append((landmark_x, landmark_y))
 
-        if index == 0:  # 手首1
+        if index == 0:  # 手腕1
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 1:  # 手首2
+        if index == 1:  # 手腕2
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 2:  # 親指：付け根
+        if index == 2:  # 拇指：指根
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 3:  # 親指：第1関節
+        if index == 3:  # 拇指：第1关节
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 4:  # 親指：指先
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-            cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
-        if index == 5:  # 人差指：付け根
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 6:  # 人差指：第2関節
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 7:  # 人差指：第1関節
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 8:  # 人差指：指先
+        if index == 4:  # 拇指：指尖
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
             cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
-        if index == 9:  # 中指：付け根
+        if index == 5:  # 食指：指根
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 10:  # 中指：第2関節
+        if index == 6:  # 食指：第2关节
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 11:  # 中指：第1関節
+        if index == 7:  # 食指：第1关节
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 12:  # 中指：指先
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-            cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
-        if index == 13:  # 薬指：付け根
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 14:  # 薬指：第2関節
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 15:  # 薬指：第1関節
-            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 16:  # 薬指：指先
+        if index == 8:  # 食指：指尖
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
             cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
-        if index == 17:  # 小指：付け根
+        if index == 9:  # 中指：指根
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 18:  # 小指：第2関節
+        if index == 10:  # 中指：第2关节
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 19:  # 小指：第1関節
+        if index == 11:  # 中指：第1关节
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
-        if index == 20:  # 小指：指先
+        if index == 12:  # 中指：指尖
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+            cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
+        if index == 13:  # 无名指：指根
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+        if index == 14:  # 无名指：第2关节
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+        if index == 15:  # 无名指：第1关节
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+        if index == 16:  # 无名指：指尖
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+            cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
+        if index == 17:  # 小拇指：指根
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+        if index == 18:  # 小拇指：第2关节
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+        if index == 19:  # 小拇指：第1关节
+            cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
+        if index == 20:  # 小拇指：指尖
             cv.circle(image, (landmark_x, landmark_y), 5, (0, 255, 0), 2)
             cv.circle(image, (landmark_x, landmark_y), 12, (0, 255, 0), 2)
 
@@ -266,13 +266,13 @@ def draw_hands_landmarks(image,
                        cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
                        cv.LINE_AA)
 
-    # 接続線
+    # 连接线
     if len(landmark_point) > 0:
-        # 親指
+        # 拇指
         cv.line(image, landmark_point[2], landmark_point[3], (0, 255, 0), 2)
         cv.line(image, landmark_point[3], landmark_point[4], (0, 255, 0), 2)
 
-        # 人差指
+        # 食指
         cv.line(image, landmark_point[5], landmark_point[6], (0, 255, 0), 2)
         cv.line(image, landmark_point[6], landmark_point[7], (0, 255, 0), 2)
         cv.line(image, landmark_point[7], landmark_point[8], (0, 255, 0), 2)
@@ -282,17 +282,17 @@ def draw_hands_landmarks(image,
         cv.line(image, landmark_point[10], landmark_point[11], (0, 255, 0), 2)
         cv.line(image, landmark_point[11], landmark_point[12], (0, 255, 0), 2)
 
-        # 薬指
+        # 无名指
         cv.line(image, landmark_point[13], landmark_point[14], (0, 255, 0), 2)
         cv.line(image, landmark_point[14], landmark_point[15], (0, 255, 0), 2)
         cv.line(image, landmark_point[15], landmark_point[16], (0, 255, 0), 2)
 
-        # 小指
+        # 小拇指
         cv.line(image, landmark_point[17], landmark_point[18], (0, 255, 0), 2)
         cv.line(image, landmark_point[18], landmark_point[19], (0, 255, 0), 2)
         cv.line(image, landmark_point[19], landmark_point[20], (0, 255, 0), 2)
 
-        # 手の平
+        # 手掌
         cv.line(image, landmark_point[0], landmark_point[1], (0, 255, 0), 2)
         cv.line(image, landmark_point[1], landmark_point[2], (0, 255, 0), 2)
         cv.line(image, landmark_point[2], landmark_point[5], (0, 255, 0), 2)
@@ -346,7 +346,7 @@ def draw_face_landmarks(image, landmarks):
         cv.line(image, landmark_point[283], landmark_point[276], (0, 255, 0),
                 2)
 
-        # 左目 (133：目頭、246：目尻)
+        # 左目 (133：目頭、246：眼外角)
         cv.line(image, landmark_point[133], landmark_point[173], (0, 255, 0),
                 2)
         cv.line(image, landmark_point[173], landmark_point[157], (0, 255, 0),
