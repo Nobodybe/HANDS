@@ -3,14 +3,106 @@
 import copy
 import argparse
 import time
-from pymouse import PyMouse
 from pykeyboard import PyKeyboard
+from pymouse import PyMouse
 
 import cv2 as cv
 import numpy as np
+import math
 import mediapipe as mp
 
 from utils import CvFpsCalc
+def main():
+    # 引数解析 #################################################################
+    args = get_args()
+    m = PyMouse()
+    k = PyKeyboard()
+    cap_device = args.device
+    cap_width = args.width
+    cap_height = args.height
+
+    max_num_hands = args.max_num_hands
+    min_detection_confidence = args.min_detection_confidence
+    min_tracking_confidence = args.min_tracking_confidence
+
+    use_brect = args.use_brect
+    now=[0,0]
+    past=[0,0]
+    count = 0
+
+    # 相机准备 ###############################################################
+    cap = cv.VideoCapture(cap_device)
+    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
+    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+
+    # 模型载荷 #############################################################
+    mp_hands = mp.solutions.hands
+    hands = mp_hands.Hands(
+        max_num_hands=max_num_hands,
+        min_detection_confidence=min_detection_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+    )
+
+    # FPS测量模块 ########################################################
+    cvFpsCalc = CvFpsCalc(buffer_len=10)
+
+    while True:
+        display_fps = cvFpsCalc.get()
+
+        # 摄像机捕捉 #####################################################
+        ret, image = cap.read()
+        if not ret:
+            break
+        image = cv.flip(image, 1)  # 镜像显示
+        debug_image = copy.deepcopy(image)
+
+        # 检测实施 #############################################################
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        results = hands.process(image)
+
+        # 描画 ################################################################
+
+
+        if results.multi_hand_landmarks is not None:
+            for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
+                                                  results.multi_handedness):
+                # 手掌重心計算
+                cx, cy = calc_palm_moment(debug_image, hand_landmarks)
+                # 外接矩形計算
+                brect = calc_bounding_rect(debug_image, hand_landmarks)
+                # 描画
+                debug_image,landmark_point_list = draw_landmarks(debug_image, cx, cy,
+                                             hand_landmarks, handedness)
+                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                past = now
+                now = [landmark_point_list[8][0],landmark_point_list[8][0]]
+
+        cv.putText(debug_image, "FPS:" + str(display_fps), (10, 30),
+        cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv.LINE_AA)
+
+
+
+        # 键盘输入处理(ESC：終了) #################################################
+        key = cv.waitKey(1)
+        if key == 27:  # ESC
+            break
+        print(now[0])
+        print(past[0])
+        print('\n')
+        # 模拟键鼠输入 ###########################################################
+        count=count+1
+        if count>2:
+            if now[0]-past[0]>100 and past!=[0,0]:
+                k.tap_key(k.right_key)
+            if now[0]-past[0]<-100 and past!=[0,0]:
+                k.tap_key(k.left_key)
+
+
+        # 画面反映 #############################################################
+        cv.imshow('MediaPipe Hand Demo', debug_image)
+
+    cap.release()
+    cv.destroyAllWindows()
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -35,102 +127,10 @@ def get_args():
 
     return args
 
-
-
-def main():
-    # 引数解析 #################################################################
-    args = get_args()
-
-    cap_device = args.device
-    cap_width = args.width
-    cap_height = args.height
-
-    max_num_hands = args.max_num_hands
-    min_detection_confidence = args.min_detection_confidence
-    min_tracking_confidence = args.min_tracking_confidence
-
-    use_brect = args.use_brect
-    now = [0, 0]
-    past = [0,0]
-    count=0
-
-    # 相机准备 ###############################################################
-    cap = cv.VideoCapture(cap_device)
-    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
-
-    # 模型载荷 #############################################################
-    mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands(
-        max_num_hands=max_num_hands,
-        min_detection_confidence=min_detection_confidence,
-        min_tracking_confidence=min_tracking_confidence,
-    )
-
-    # FPS测量模块 ########################################################
-    cvFpsCalc = CvFpsCalc(buffer_len=10)
-
-    k = PyKeyboard()
-    m = PyMouse()
-
-    while True:
-        display_fps = cvFpsCalc.get()
-
-        # 摄像机捕捉 #####################################################
-        ret, image = cap.read()
-        if not ret:
-            break
-        image = cv.flip(image, 1)  # 镜像显示
-        debug_image = copy.deepcopy(image)
-
-        # 检测实施 #############################################################
-        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-        results = hands.process(image)
-
-        # 描画 ################################################################
-        if results.multi_hand_landmarks is not None:
-            for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
-                                                  results.multi_handedness):
-                # 手掌重心計算
-                cx, cy = calc_palm_moment(debug_image, hand_landmarks)
-                # 外接矩形計算
-                brect = calc_bounding_rect(debug_image, hand_landmarks)
-                # 描画
-                debug_image = draw_landmarks(debug_image, cx, cy,
-                                             hand_landmarks, handedness)
-                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                past = now
-                now = [cx, cy]
-        cv.putText(debug_image, "FPS:" + str(display_fps), (10, 30),
-                   cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv.LINE_AA)
-
-
-
-        # 键盘输入处理(ESC：終了) #################################################
-        key = cv.waitKey(1)
-        if key == 27:  # ESC
-            break
-        count=count+1
-        print(now)
-        print(past)
-        print('\n')
-        if count>2 and results.multi_hand_landmarks is not None:
-            if now[0]-past[0]>120 and past!=[0,0]:
-                k.tap_key(k.right_key)
-                time.sleep(0.5)
-            if now[0]-past[0]<-120 and past!=[0,0]:
-                k.tap_key(k.left_key)
-                time.sleep(0.5)
-
-
-        # 画面反映 #############################################################
-        cv.imshow('MediaPipe Hand Demo', debug_image)
-
-    cap.release()
-    cv.destroyAllWindows()
-
-
 def calc_palm_moment(image, landmarks):
+    '''
+        #掌心的计算
+    '''
     image_width, image_height = image.shape[1], image.shape[0]
 
     palm_array = np.empty((0, 2), int)
@@ -161,10 +161,11 @@ def calc_palm_moment(image, landmarks):
 
     return cx, cy
 
-
 def calc_bounding_rect(image, landmarks):
+    '''
+        #外接矩形的计算
+    '''
     image_width, image_height = image.shape[1], image.shape[0]
-
     landmark_array = np.empty((0, 2), int)
 
     for _, landmark in enumerate(landmarks.landmark):
@@ -179,7 +180,6 @@ def calc_bounding_rect(image, landmarks):
 
     return [x, y, x + w, y + h]
 
-
 def draw_landmarks(image, cx, cy, landmarks, handedness):
     image_width, image_height = image.shape[1], image.shape[0]
 
@@ -192,7 +192,7 @@ def draw_landmarks(image, cx, cy, landmarks, handedness):
 
         landmark_x = min(int(landmark.x * image_width), image_width - 1)
         landmark_y = min(int(landmark.y * image_height), image_height - 1)
-        # landmark_z = landmark.z
+        #landmark_z = landmark.z
 
         landmark_point.append((landmark_x, landmark_y))
 
@@ -289,8 +289,7 @@ def draw_landmarks(image, cx, cy, landmarks, handedness):
                    (cx - 6, cy + 6), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),
                    2, cv.LINE_AA)  # label[0]:一文字目だけ
 
-    return image
-
+    return image,landmark_point
 
 def draw_bounding_rect(use_brect, image, brect):
     if use_brect:
@@ -300,6 +299,10 @@ def draw_bounding_rect(use_brect, image, brect):
 
     return image
 
-
 if __name__ == '__main__':
     main()
+
+'''
+   #当出现两个手指时，图片会一直切换
+   #手指回去的时候算作什么
+'''
