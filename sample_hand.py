@@ -2,42 +2,21 @@
 # -*- coding: utf-8 -*-
 import copy
 import argparse
+import time
+from pykeyboard import PyKeyboard
+from pymouse import PyMouse
 
 import cv2 as cv
 import numpy as np
+import math
 import mediapipe as mp
 
 from utils import CvFpsCalc
-
-
-def get_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--width", help='cap width', type=int, default=960)
-    parser.add_argument("--height", help='cap height', type=int, default=540)
-
-    parser.add_argument("--max_num_hands", type=int, default=2)
-    parser.add_argument("--min_detection_confidence",
-                        help='min_detection_confidence',
-                        type=float,
-                        default=0.7)
-    parser.add_argument("--min_tracking_confidence",
-                        help='min_tracking_confidence',
-                        type=int,
-                        default=0.5)
-
-    parser.add_argument('--use_brect', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
 def main():
     # 引数解析 #################################################################
     args = get_args()
-
+    m = PyMouse()
+    k = PyKeyboard()
     cap_device = args.device
     cap_width = args.width
     cap_height = args.height
@@ -47,6 +26,9 @@ def main():
     min_tracking_confidence = args.min_tracking_confidence
 
     use_brect = args.use_brect
+    now=[0,0]
+    past=[0,0]
+    count = 0
 
     # 相机准备 ###############################################################
     cap = cv.VideoCapture(cap_device)
@@ -71,7 +53,7 @@ def main():
         ret, image = cap.read()
         if not ret:
             break
-        image = cv.flip(image, 1)  # ミラー表示
+        image = cv.flip(image, 1)  # 镜像显示
         debug_image = copy.deepcopy(image)
 
         # 检测实施 #############################################################
@@ -79,6 +61,8 @@ def main():
         results = hands.process(image)
 
         # 描画 ################################################################
+
+
         if results.multi_hand_landmarks is not None:
             for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
                                                   results.multi_handedness):
@@ -87,17 +71,32 @@ def main():
                 # 外接矩形計算
                 brect = calc_bounding_rect(debug_image, hand_landmarks)
                 # 描画
-                debug_image = draw_landmarks(debug_image, cx, cy,
+                debug_image,landmark_point_list = draw_landmarks(debug_image, cx, cy,
                                              hand_landmarks, handedness)
                 debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                past = now
+                now = [landmark_point_list[8][0],landmark_point_list[8][0]]
 
         cv.putText(debug_image, "FPS:" + str(display_fps), (10, 30),
-                   cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv.LINE_AA)
+        cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv.LINE_AA)
+
+
 
         # 键盘输入处理(ESC：終了) #################################################
         key = cv.waitKey(1)
         if key == 27:  # ESC
             break
+        print(now[0])
+        print(past[0])
+        print('\n')
+        # 模拟键鼠输入 ###########################################################
+        count=count+1
+        if count>2:
+            if now[0]-past[0]>100 and past!=[0,0]:
+                k.tap_key(k.right_key)
+            if now[0]-past[0]<-100 and past!=[0,0]:
+                k.tap_key(k.left_key)
+
 
         # 画面反映 #############################################################
         cv.imshow('MediaPipe Hand Demo', debug_image)
@@ -105,8 +104,33 @@ def main():
     cap.release()
     cv.destroyAllWindows()
 
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--width", help='cap width', type=int, default=960)
+    parser.add_argument("--height", help='cap height', type=int, default=540)
+
+    parser.add_argument("--max_num_hands", type=int, default=2)
+    parser.add_argument("--min_detection_confidence",
+                        help='min_detection_confidence',
+                        type=float,
+                        default=0.7)
+    parser.add_argument("--min_tracking_confidence",
+                        help='min_tracking_confidence',
+                        type=int,
+                        default=0.5)
+
+    parser.add_argument('--use_brect', action='store_true')
+
+    args = parser.parse_args()
+
+    return args
 
 def calc_palm_moment(image, landmarks):
+    '''
+        #掌心的计算
+    '''
     image_width, image_height = image.shape[1], image.shape[0]
 
     palm_array = np.empty((0, 2), int)
@@ -137,10 +161,11 @@ def calc_palm_moment(image, landmarks):
 
     return cx, cy
 
-
 def calc_bounding_rect(image, landmarks):
+    '''
+        #外接矩形的计算
+    '''
     image_width, image_height = image.shape[1], image.shape[0]
-
     landmark_array = np.empty((0, 2), int)
 
     for _, landmark in enumerate(landmarks.landmark):
@@ -155,7 +180,6 @@ def calc_bounding_rect(image, landmarks):
 
     return [x, y, x + w, y + h]
 
-
 def draw_landmarks(image, cx, cy, landmarks, handedness):
     image_width, image_height = image.shape[1], image.shape[0]
 
@@ -168,7 +192,7 @@ def draw_landmarks(image, cx, cy, landmarks, handedness):
 
         landmark_x = min(int(landmark.x * image_width), image_width - 1)
         landmark_y = min(int(landmark.y * image_height), image_height - 1)
-        # landmark_z = landmark.z
+        #landmark_z = landmark.z
 
         landmark_point.append((landmark_x, landmark_y))
 
@@ -265,8 +289,7 @@ def draw_landmarks(image, cx, cy, landmarks, handedness):
                    (cx - 6, cy + 6), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),
                    2, cv.LINE_AA)  # label[0]:一文字目だけ
 
-    return image
-
+    return image,landmark_point
 
 def draw_bounding_rect(use_brect, image, brect):
     if use_brect:
@@ -276,6 +299,10 @@ def draw_bounding_rect(use_brect, image, brect):
 
     return image
 
-
 if __name__ == '__main__':
     main()
+
+'''
+   #当出现两个手指时，图片会一直切换
+   #手指回去的时候算作什么
+'''
